@@ -1,0 +1,170 @@
+import processing.opengl.*;
+import controlP5.*;
+import ddf.minim.*;
+
+/*
+ * Draw sketch in full screen mode
+ */
+boolean sketchFullScreen() {
+  return true;
+}
+
+Minim minim;
+AudioSample kick;
+AudioSample snare;
+AudioSample hat;
+
+ControlP5 gui;
+// Control if a beat it's active
+boolean[] hatRow = new boolean[16];
+boolean[] snrRow = new boolean[16];
+boolean[] kikRow = new boolean[16];
+
+public int bpm;
+int tempo;
+int clock;
+int beat;
+boolean beatTriggered;
+
+float k, h, s;              // variables to store signal values of the samples
+float signal;               // signal addition of the samples signals
+float amplitude = 100;      // Amplitude of the signal. This can be tuned 
+boolean has_noise = true;   // apply some noise to avoid plain signal
+int mirror = 1;             // set to -1 to mirror one of the signal lines 
+
+PFont jedi_font;
+
+void setup()
+{
+  size(displayWidth, displayHeight, OPENGL);
+  minim = new Minim(this);
+  int bsize = 2048;
+  // Load samples
+  kick = minim.loadSample("BD.wav", bsize);
+  snare = minim.loadSample("SD.wav", bsize);
+  hat = minim.loadSample("CHH.wav", bsize);
+  
+  gui = new ControlP5(this);
+  gui.setColorForeground(color(128, 200));
+  gui.setColorActive(color(209, 53, 203, 200));
+  Toggle b1;
+  Toggle b2;
+  Toggle b3;
+  for (int i = 0; i < 16; i++)
+  {
+    b1 = gui.addToggle("hat" + i, false, 60+i*30, 50, 24, 30);
+    b1.setId(i);
+    b1.setLabel("hat");
+    b2 = gui.addToggle("snr" + i, false, 60+i*30, 100, 24, 30);
+    b2.setId(i);
+    b2.setLabel("snr");
+    b3 = gui.addToggle("kik" + i, false, 60+i*30, 150, 24, 30);
+    b3.setId(i);
+    b3.setLabel("kik");
+  }
+  gui.addNumberbox("bpm", 120, 10, 5, 20, 15);
+  
+  // 120bpm = 125ms in 16th partition
+  bpm = 110;
+  tempo = 125;
+  clock = millis();
+  beat = 0;
+  beatTriggered = false;
+  
+  textFont(createFont("Arial", 16));
+  jedi_font = loadFont("StarJediSpecialEdition.vlw");
+}
+
+void draw()
+{
+  // Clean the canvas
+  background(0);
+  fill(255);
+  
+  // Calculate the tempo from the bpm (16th)
+  tempo = (60*100/bpm)*2;
+  if ( millis() - clock >= tempo )
+  {
+    clock = millis();
+    beat = (beat+1) % 16;
+    beatTriggered = false;
+  }
+  
+  // Trigger the beats and avoid multiple triggering for the same beat
+  if ( !beatTriggered )
+  {
+    if ( hatRow[beat] ) kick.trigger();
+    if ( snrRow[beat] ) snare.trigger();
+    if ( kikRow[beat] ) hat.trigger();
+    beatTriggered = true;
+  }
+  
+  // Beat marker
+  noStroke();
+  fill(0, 200, 0);
+  rect(60+beat*30, 40, 24, 5);
+  stroke(128);
+
+  strokeWeight(30);
+  strokeJoin(ROUND);
+
+  for (int i = 0; i < kick.mix.size()-1; i++)
+  {
+    // Get the signal value for each sample from its buffer
+    k = kick.mix.get(i) * amplitude;
+    s = snare.mix.get(i) * amplitude;
+    h = hat.mix.get(i) * amplitude;
+    // Here we could apply different weights to every component
+    signal = k + s + h;
+
+    // Enable some noise to avoid plain signal
+    if (has_noise && signal < 0.5)
+    {
+      signal = noise(random(i))*10;  
+    }
+    // Map the color of the line using the different signal terms
+    //stroke(map(k,-5,15,0,255), map(s,-5,5,0,255), map(h,-5,5,0,255));
+    stroke (255,0,255);
+    // Draw two signal lines
+    line(i, height-height/4 - signal, i+1, height-height/4 - signal);
+    line(i, height-height/8 - mirror*signal, i+1, height-height/8 - mirror*signal);
+  }
+  
+  gui.draw();
+  
+  fill(143, 204, 204);
+  textFont(jedi_font, 48);
+  text("Brain Beats", 0.65*width, 80);
+}
+
+/*
+ * Check for all the beat boxes if they're enabled or not using 
+ * the label and position.
+ */
+public void controlEvent(ControlEvent e)
+{
+  if ( e.controller().getLabel() == "hat" )
+  {
+    hatRow[ e.controller().id() ] = e.controller().value() == 0.0 ? false : true;
+  }
+  else if ( e.controller().getLabel() == "snr" )
+  {
+    snrRow[ e.controller().id() ] = e.controller().value() == 0.0 ? false : true;
+  }
+  else if ( e.controller().getLabel() == "kik" )
+  {
+    kikRow[ e.controller().id() ] = e.controller().value() == 0.0 ? false : true;
+  }
+}
+
+/*
+ * Clean up the house
+ */
+void stop()
+{
+  kick.close();
+  snare.close();
+  hat.close();
+  minim.stop();
+  super.stop();
+}
