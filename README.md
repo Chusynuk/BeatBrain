@@ -1,1 +1,3 @@
-# This is my folder of Processing projects.
+# Processing
+
+## This is my folder of Processing projects.
